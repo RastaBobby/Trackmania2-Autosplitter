@@ -226,7 +226,7 @@ reset
     if ((vars.GameInfo.Old != vars.GameInfo.Current) && (vars.GameInfo.Current.StartsWith("[Game] init challenge")))
     {
         var loadmap = vars.GameInfo.Current.Replace("[Game] init challenge", "LoadMap").Substring(0, 19);
-        if ((loadmap.StartsWith(vars.GetFirstMap())) && (!settings["SmartSplit"]))
+        if ((vars.GetFirstMap.Contains(loadmap)) && (!settings["SmartSplit"]))
             return true;
 
         // Auto reset for unofficial maps, started map should be saved since auto start
