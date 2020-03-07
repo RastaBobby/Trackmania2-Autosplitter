@@ -1,0 +1,241 @@
+state("ManiaPlanet32") {}
+state("ManiaPlanet") {}
+
+startup {
+    refreshRate = 0.5;
+
+	settings.Add("DisplayIGT", false, "Display total ingame time (IGT)");
+	settings.Add("SplitOnCP", false, "Split on checkpoint");
+    settings.Add("SplitOnMapChange", false, "Split on track change");
+	settings.Add("SplitOnMapFinishLine", true, "Split on track finish");
+    settings.Add("SmartSplit", false, "Unofficial tracks", "SplitOnMapFinishLine");
+    settings.Add("SplitOnMapFinish", true, "Nadeo tracks", "SplitOnMapFinishLine");
+
+    List<string> categoryNames = new List<string>() {"White", "Green", "Blue", "Red", "Black"};
+    
+    for(int colorId = 0; colorId < categoryNames.Count; colorId++) {
+        string raceColor = categoryNames[colorId];
+        settings.Add(raceColor, true, raceColor, "SplitOnMapFinish");
+        for(int mapNb = 1; mapNb < 16; mapNb++) {
+            if(colorId == (categoryNames.Count-1) && mapNb > 5) break;
+            string map = string.Format("LoadMap '$fff$s{0}{1}'", (char)(colorId + 65), mapNb.ToString("D2"));
+            settings.Add(map, true, map.Substring(15, 3), raceColor);
+        }
+    }
+
+    vars.startMaps = new List<string>() {"LoadMap '$fff$sA01'","LoadMap '$fff$sB01'","LoadMap '$fff$sC01'","LoadMap '$fff$sD01'","LoadMap '$fff$sE01'"};
+
+    vars.isGameDown = false;
+    vars.startedMap = string.Empty;
+
+    vars.totalIGT = 0;
+    vars.textSettingIGT = null;
+
+    vars.GetValPtrFromSigPtr = (Func<Process, IntPtr, IntPtr>)((proc, sigPtr) => {
+        if(proc.Is64Bit()) {
+            int offset = 0;
+            proc.ReadValue<int>(sigPtr, out offset);
+            sigPtr = (IntPtr)((long)sigPtr + (long)offset + 4);
+        } else
+            proc.ReadPointer(sigPtr, out sigPtr);
+        return sigPtr;
+    });
+
+    vars.GetRelPtrFromBase = (Func<IntPtr, IntPtr, int>)((ptr, baseAddr) => {
+        return (int)((long)ptr - (long)baseAddr);
+    });
+
+    vars.UpdateTimerIGT = (Action)(() => {
+        if(vars.textSettingIGT == null) {
+            foreach (dynamic component in timer.Layout.Components) {
+                if (component.GetType().Name == "TextComponent" && component.Settings.Text1 == "In-Game Time")
+                    vars.textSettingIGT = component.Settings;
+            }
+
+            if(vars.textSettingIGT == null)
+                vars.textSettingIGT = vars.CreateTextComponent("In-Game Time");
+        }
+
+        string formatTimer = "";
+        if(vars.totalIGT + vars.raceTimer.Current == -1) {
+            formatTimer = "0.000";
+        } else {
+            TimeSpan curIGT = TimeSpan.FromMilliseconds(vars.totalIGT + (vars.raceTimer.Current != -1 ? vars.raceTimer.Current : 0));
+            formatTimer = vars.FormatTimer(curIGT);
+        }
+        vars.textSettingIGT.Text2 = formatTimer;
+    });
+
+    vars.CreateTextComponent = (Func<string, dynamic>)((name) => {
+        var textComponentAssembly = Assembly.LoadFrom("Components\\LiveSplit.Text.dll");
+        dynamic textComponent = Activator.CreateInstance(textComponentAssembly.GetType("LiveSplit.UI.Components.TextComponent"), timer);
+        timer.Layout.LayoutComponents.Add(new LiveSplit.UI.Components.LayoutComponent("LiveSplit.Text.dll", textComponent as LiveSplit.UI.Components.IComponent));
+        textComponent.Settings.Text1 = name;
+        return textComponent.Settings;
+    });
+
+    vars.FormatTimer = (Func<TimeSpan, string>)((timeSpan) => {
+        return timeSpan.ToString((timeSpan.Hours > 0 ? "h\\:mm\\:ss\\.fff" : (timeSpan.Minutes > 9 ? "mm\\:ss\\.fff" : (timeSpan.Minutes > 0 ? "m\\:ss\\.fff" : (timeSpan.Seconds > 9 ? "ss\\.fff" : "s\\.fff")))), System.Globalization.CultureInfo.InvariantCulture);
+    });
+
+    vars.IsStartMap = (Func<string, bool>)((map) => {
+        switch (timer.Run.CategoryName) {
+            case "White":
+            case "All Flags":
+                return map.Equals("LoadMap '$fff$sA01'");
+            case "Green":
+                return map.Equals("LoadMap '$fff$sB01'");
+            case "Blue":
+                return map.Equals("LoadMap '$fff$sC01'");
+            case "Red":
+                return map.Equals("LoadMap '$fff$sD01'");
+            case "Black":
+                return map.Equals("LoadMap '$fff$sE01'");
+            default:
+                return vars.startMaps.Contains(map);
+        }
+    });
+}
+
+init {
+    IntPtr loadingSigPtr = IntPtr.Zero;
+    IntPtr raceStructSigPtr = IntPtr.Zero;
+    IntPtr loadMapSigPtr = IntPtr.Zero;
+    IntPtr gameInfoSigPtr = IntPtr.Zero;
+
+    vars.loadingTarget = (game.Is64Bit())
+        ? new SigScanTarget(2, "8B 05 ?? ?? ?? ?? 75 0E") //Updated
+        : new SigScanTarget(9, "51 83 3D ?? ?? ?? ?? ?? A1 ?? ?? ?? ??");
+
+    vars.raceStructTarget = (game.Is64Bit())
+        ? new SigScanTarget(8, "56 48 83 EC 30 48 8B 05 ?? ?? ?? ?? 41 8B F1") //Updated
+        : new SigScanTarget(38, "56 8B F1 E8 ?? ?? ?? ?? 8B 8E ?? ?? ?? ?? 85 C9 74 36");
+
+    vars.loadMapTarget = (game.Is64Bit())
+        ? new SigScanTarget(8, "7F 23 45 33 C0") //Updated
+        : new SigScanTarget(59, "55 8B EC 6A FF 68 ?? ?? ?? ?? 64 A1 ?? ?? ?? ?? 50 A1 ?? ?? ?? ?? 51 33 C5 50 8D 45 F4 64 A3 ?? ?? ?? ?? 64 A1 ?? ?? ?? ??");
+
+    vars.gameInfoTarget = (game.Is64Bit())
+        ? new SigScanTarget(3, "48 89 05 ?? ?? ?? ?? 89 3D") //Updated
+        : new SigScanTarget(1, "B9 ?? ?? ?? ?? E8 ?? ?? ?? ?? A1 ?? ?? ?? ?? C6 04 38 00");
+
+    print("[Autosplitter] Scanning memory");
+
+    IntPtr baseAddr = modules.First().BaseAddress;
+
+    var scanner = new SignatureScanner(game, baseAddr, modules.First().ModuleMemorySize);
+
+    if((loadingSigPtr = scanner.Scan(vars.loadingTarget)) != IntPtr.Zero)
+        print("[Autosplitter] Loading Found : " + loadingSigPtr.ToString("X"));
+
+    if((raceStructSigPtr = scanner.Scan(vars.raceStructTarget)) != IntPtr.Zero)
+        print("[Autosplitter] Race State Found : " + raceStructSigPtr.ToString("X"));
+
+    if((loadMapSigPtr = scanner.Scan(vars.loadMapTarget)) != IntPtr.Zero)
+        print("[Autosplitter] LoadMap Found : " + loadMapSigPtr.ToString("X"));
+
+    if((gameInfoSigPtr = scanner.Scan(vars.gameInfoTarget)) != IntPtr.Zero)
+        print("[Autosplitter] Game Info Found : " + gameInfoSigPtr.ToString("X"));
+
+    if(loadingSigPtr == IntPtr.Zero || raceStructSigPtr == IntPtr.Zero || loadMapSigPtr == IntPtr.Zero || gameInfoSigPtr == IntPtr.Zero)
+        throw new Exception("[Autosplitter] Can't find signature");
+
+    IntPtr loadingPtr = vars.GetValPtrFromSigPtr(game, loadingSigPtr);
+    int raceStructPtr = vars.GetRelPtrFromBase(vars.GetValPtrFromSigPtr(game, raceStructSigPtr), baseAddr);
+    int loadMapPtr = vars.GetRelPtrFromBase(vars.GetValPtrFromSigPtr(game, loadMapSigPtr), baseAddr);
+    int gameInfoPtr = vars.GetRelPtrFromBase(vars.GetValPtrFromSigPtr(game, gameInfoSigPtr), baseAddr);
+
+     vars.watchers = new MemoryWatcherList() {
+        (vars.isLoading = new MemoryWatcher<bool>(loadingPtr)),
+        (vars.raceTimer = new MemoryWatcher<int>(new DeepPointer(raceStructPtr, 0x28, 0xC8))),
+        (vars.raceCP = new MemoryWatcher<int>(new DeepPointer(raceStructPtr, 0x28, 0xE0))), //max 0xEC
+        (vars.raceState = new MemoryWatcher<int>(new DeepPointer(raceStructPtr, 0x28, 0xE8))),
+        (vars.loadMap = new StringWatcher(new DeepPointer(loadMapPtr, 0), ReadStringType.ASCII, 128)),
+        (vars.gameInfo = new StringWatcher(new DeepPointer(gameInfoPtr, 0), ReadStringType.ASCII, 128))
+    };
+
+    vars.timerResetVars = (EventHandler)((s, e) => {
+        vars.isGameDown = false;
+        vars.startedMap = string.Empty;
+        vars.totalIGT = 0;
+    });
+    timer.OnStart += vars.timerResetVars;
+
+    vars.timerResetDisplay = (LiveSplit.Model.Input.EventHandlerT<TimerPhase>)((s, e) => {
+        vars.totalIGT = 0;
+        if(vars.textSettingIGT != null)
+            vars.textSettingIGT.Text2 = "0.000";
+    });
+    timer.OnReset += vars.timerResetDisplay;
+
+    refreshRate = 200/3d;
+}
+
+update {
+    vars.watchers.UpdateAll(game);
+
+    if(vars.isGameDown && vars.gameInfo.Current.StartsWith("[Game] main menu") && vars.gameInfo.Old.StartsWith("[Game] Loading title")) {
+        print("[Autosplitter] Unpaused GameTime");
+        timer.IsGameTimePaused = false;
+        vars.isGameDown = false;
+    }
+}
+
+start {
+    if(!(vars.isLoading.Old && !vars.isLoading.Current)) return false;
+
+    if(!settings["SmartSplit"])
+        return vars.IsStartMap(vars.loadMap.Current);
+    else {
+        print("[Autosplitter] StartedMap = " + vars.loadMap.Current);
+        vars.startedMap = vars.loadMap.Current;
+        return true;
+    }
+}
+
+split {
+    if(settings["DisplayIGT"]) {
+        if(vars.raceTimer.Changed && vars.raceTimer.Current == -1) {
+            vars.totalIGT += vars.raceTimer.Old;
+            vars.UpdateTimerIGT();
+        } else if(vars.raceCP.Old < vars.raceCP.Current)
+            vars.UpdateTimerIGT();
+    }
+
+    if(vars.loadMap.Changed)
+        return settings["SplitOnMapChange"];
+
+    if(vars.raceState.Old == 1 && vars.raceState.Current == 2 && !vars.isLoading.Current)
+        return settings[vars.loadMap.Current] || settings["SmartSplit"] || settings["SplitOnCP"];
+
+    if(vars.raceCP.Old < vars.raceCP.Current)
+        return settings["SplitOnCP"];
+}
+
+reset {
+    if(!(vars.gameInfo.Changed && vars.gameInfo.Current.StartsWith("[Game] init challenge"))) return false;
+
+    string loadmap = vars.gameInfo.Current.Replace("[Game] init challenge", "LoadMap").Substring(0, 19);
+    
+    if(!settings["SmartSplit"])
+        return vars.IsStartMap(loadmap);
+    else
+        return loadmap.StartsWith(vars.startedMap);
+}
+
+isLoading {
+    return vars.isLoading.Current || vars.isGameDown;
+}
+
+exit {
+    if(timer.CurrentPhase == TimerPhase.Running || timer.CurrentPhase == TimerPhase.Paused) {
+        print("[Autosplitter] Paused GameTime");
+        timer.IsGameTimePaused = true;
+        vars.isGameDown = true;
+    }
+}
+
+shutdown {
+    timer.OnStart -= vars.timerResetVars;
+    timer.OnReset -= vars.timerResetDisplay;
+}
