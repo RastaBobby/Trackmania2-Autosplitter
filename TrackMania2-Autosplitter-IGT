@@ -5,17 +5,17 @@ startup {
     refreshRate = 0.5;
 
 	settings.Add("DisplayIGT", false, "Display total ingame time (IGT)");
-	settings.Add("SplitOnCP", false, "Split on checkpoint");
-    settings.Add("SplitOnMapChange", false, "Split on track change");
-	settings.Add("SplitOnMapFinishLine", true, "Split on track finish");
-    settings.Add("SmartSplit", false, "Unofficial tracks", "SplitOnMapFinishLine");
-    settings.Add("SplitOnMapFinish", true, "Nadeo tracks", "SplitOnMapFinishLine");
+	settings.Add("SplitOnCP", false, "Split on checkpoints");
+	settings.Add("SplitOnMapChange", false, "Split on track change");
+	settings.Add("SplitOnFinishLine", true, "Split on finish line");
+	settings.Add("SmartSplit", false, "Unofficial tracks (no auto-reset)", "SplitOnFinishLine");
+	settings.Add("NadeoSplit", true, "Nadeo tracks", "SplitOnFinishLine");
 
     List<string> categoryNames = new List<string>() {"White", "Green", "Blue", "Red", "Black"};
     
     for(int colorId = 0; colorId < categoryNames.Count; colorId++) {
         string raceColor = categoryNames[colorId];
-        settings.Add(raceColor, true, raceColor, "SplitOnMapFinish");
+        settings.Add(raceColor, true, raceColor, "NadeoSplit");
         for(int mapNb = 1; mapNb < 16; mapNb++) {
             if(colorId == (categoryNames.Count-1) && mapNb > 5) break;
             string map = string.Format("LoadMap '$fff$s{0}{1}'", (char)(colorId + 65), mapNb.ToString("D2"));
@@ -24,7 +24,7 @@ startup {
     }
 
     vars.startMaps = new List<string>() {"LoadMap '$fff$sA01'","LoadMap '$fff$sB01'","LoadMap '$fff$sC01'","LoadMap '$fff$sD01'","LoadMap '$fff$sE01'"};
-
+	vars.NadeoMaps = new List<string>() {"LoadMap '$fff$sA01'","LoadMap '$fff$sA02'","LoadMap '$fff$sA03'","LoadMap '$fff$sA04'","LoadMap '$fff$sA05'","LoadMap '$fff$sA06'","LoadMap '$fff$sA07'","LoadMap '$fff$sA08'","LoadMap '$fff$sA09'","LoadMap '$fff$sA10'","LoadMap '$fff$sA11'","LoadMap '$fff$sA12'","LoadMap '$fff$sA13'","LoadMap '$fff$sA14'","LoadMap '$fff$sA15'","LoadMap '$fff$sB01'","LoadMap '$fff$sB02'","LoadMap '$fff$sB03'","LoadMap '$fff$sB04'","LoadMap '$fff$sB05'","LoadMap '$fff$sB06'","LoadMap '$fff$sB07'","LoadMap '$fff$sB08'","LoadMap '$fff$sB09'","LoadMap '$fff$sB10'","LoadMap '$fff$sB11'","LoadMap '$fff$sB12'","LoadMap '$fff$sB13'","LoadMap '$fff$sB14'","LoadMap '$fff$sB15'","LoadMap '$fff$sC01'","LoadMap '$fff$sC02'","LoadMap '$fff$sC03'","LoadMap '$fff$sC04'","LoadMap '$fff$sC05'","LoadMap '$fff$sC06'","LoadMap '$fff$sC07'","LoadMap '$fff$sC08'","LoadMap '$fff$sC09'","LoadMap '$fff$sC10'","LoadMap '$fff$sC11'","LoadMap '$fff$sC12'","LoadMap '$fff$sC13'","LoadMap '$fff$sC14'","LoadMap '$fff$sC15'","LoadMap '$fff$sD01'","LoadMap '$fff$sD02'","LoadMap '$fff$sD03'","LoadMap '$fff$sD04'","LoadMap '$fff$sD05'","LoadMap '$fff$sD06'","LoadMap '$fff$sD07'","LoadMap '$fff$sD08'","LoadMap '$fff$sD09'","LoadMap '$fff$sD10'","LoadMap '$fff$sD11'","LoadMap '$fff$sD12'","LoadMap '$fff$sD13'","LoadMap '$fff$sD14'","LoadMap '$fff$sD15'","LoadMap '$fff$sE01'","LoadMap '$fff$sE02'","LoadMap '$fff$sE03'","LoadMap '$fff$sE04'","LoadMap '$fff$sE05'"};
     vars.isGameDown = false;
     vars.startedMap = string.Empty;
 
@@ -184,13 +184,25 @@ update {
 start {
     if(!(vars.isLoading.Old && !vars.isLoading.Current)) return false;
 
-    if(!settings["SmartSplit"])
-        return vars.IsStartMap(vars.loadMap.Current);
-    else {
-        print("[Autosplitter] StartedMap = " + vars.loadMap.Current);
-        vars.startedMap = vars.loadMap.Current;
-        return true;
-    }
+	if(!settings["SmartSplit"])
+		if(settings["NadeoSplit"])
+			return vars.IsStartMap(vars.loadMap.Current);
+		else {
+			return false;
+		}
+	else {
+		if(vars.NadeoMaps.Contains(vars.loadMap.Current))
+			if(settings["NadeoSplit"])
+				return vars.IsStartMap(vars.loadMap.Current);
+			else {
+				return false;
+			}
+		else {
+			print("[Autosplitter] StartedMap = " + vars.loadMap.Current);
+			vars.startedMap = vars.loadMap.Current;
+			return true;
+		}
+	}
 }
 
 split {
@@ -217,10 +229,11 @@ reset {
 
     string loadmap = vars.gameInfo.Current.Replace("[Game] init challenge", "LoadMap").Substring(0, 19);
     
-    if(!settings["SmartSplit"])
-        return vars.IsStartMap(loadmap);
-    else
-        return loadmap.StartsWith(vars.startedMap);
+    if(settings["NadeoSplit"])
+		return vars.IsStartMap(loadmap);
+	else {
+		return false;
+	}
 }
 
 isLoading {
