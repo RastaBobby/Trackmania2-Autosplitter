@@ -184,16 +184,12 @@ update {
 start {
     if(!(vars.isLoading.Old && !vars.isLoading.Current)) return false;
 
-	if(!settings["SmartSplit"])
+	if(vars.NadeoMaps.Contains(vars.loadMap.Current))
 		return vars.IsStartMap(vars.loadMap.Current);
 	else {
-		if(vars.NadeoMaps.Contains(vars.loadMap.Current))
-			return vars.IsStartMap(vars.loadMap.Current);
-		else {
-			print("[Autosplitter] StartedMap = " + vars.loadMap.Current);
-			vars.startedMap = vars.loadMap.Current;
-			return true;
-		}
+		print("[Autosplitter] StartedMap = " + vars.loadMap.Current);
+		vars.startedMap = vars.loadMap.Current;
+		return true;
 	}
 }
 
@@ -221,11 +217,7 @@ reset {
 
     string loadmap = vars.gameInfo.Current.Replace("[Game] init challenge", "LoadMap").Substring(0, 19);
     
-    if(settings["NadeoSplit"])
-		return vars.IsStartMap(loadmap);
-	else {
-		return false;
-	}
+	return vars.IsStartMap(loadmap);
 }
 
 isLoading {
