@@ -6,7 +6,7 @@ startup {
 
 	settings.Add("DisplayIGT", false, "Display total ingame time (IGT)");
 	settings.Add("SplitOnCP", false, "Split on checkpoints");
-	settings.Add("SplitOnMapChange", false, "Split on Next Track in the menu");
+	settings.Add("SplitOnMapChange", false, "Split on map change");
 	settings.Add("SplitOnFinishLine", true, "Split on finish line");
 	settings.Add("SmartSplit", false, "Unofficial tracks (no auto-reset)", "SplitOnFinishLine");
 	settings.Add("NadeoSplit", true, "Nadeo tracks", "SplitOnFinishLine");
@@ -185,18 +185,10 @@ start {
     if(!(vars.isLoading.Old && !vars.isLoading.Current)) return false;
 
 	if(!settings["SmartSplit"])
-		if(settings["NadeoSplit"])
-			return vars.IsStartMap(vars.loadMap.Current);
-		else {
-			return false;
-		}
+		return vars.IsStartMap(vars.loadMap.Current);
 	else {
 		if(vars.NadeoMaps.Contains(vars.loadMap.Current))
-			if(settings["NadeoSplit"])
-				return vars.IsStartMap(vars.loadMap.Current);
-			else {
-				return false;
-			}
+			return vars.IsStartMap(vars.loadMap.Current);
 		else {
 			print("[Autosplitter] StartedMap = " + vars.loadMap.Current);
 			vars.startedMap = vars.loadMap.Current;
