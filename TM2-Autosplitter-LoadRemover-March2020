@@ -185,18 +185,10 @@ start {
     if(!(vars.isLoading.Old && !vars.isLoading.Current)) return false;
 
 	if(!settings["SmartSplit"])
-		if(settings["NadeoSplit"])
-			return vars.IsStartMap(vars.loadMap.Current);
-		else {
-			return false;
-		}
+		return vars.IsStartMap(vars.loadMap.Current);
 	else {
 		if(vars.NadeoMaps.Contains(vars.loadMap.Current))
-			if(settings["NadeoSplit"])
-				return vars.IsStartMap(vars.loadMap.Current);
-			else {
-				return false;
-			}
+			return vars.IsStartMap(vars.loadMap.Current);
 		else {
 			print("[Autosplitter] StartedMap = " + vars.loadMap.Current);
 			vars.startedMap = vars.loadMap.Current;
