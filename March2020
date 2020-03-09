@@ -8,7 +8,7 @@ startup {
 	settings.Add("SplitOnCP", false, "Split on checkpoints");
 	settings.Add("SplitOnMapChange", false, "Split on map change");
 	settings.Add("SplitOnFinishLine", true, "Split on finish line");
-	settings.Add("SmartSplit", false, "Unofficial tracks (no auto-reset)", "SplitOnFinishLine");
+	settings.Add("SmartSplit", true, "Unofficial tracks (no auto-reset)", "SplitOnFinishLine");
 	settings.Add("NadeoSplit", true, "Nadeo tracks", "SplitOnFinishLine");
 
     List<string> categoryNames = new List<string>() {"White", "Green", "Blue", "Red", "Black"};
